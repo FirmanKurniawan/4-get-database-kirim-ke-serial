@@ -58,7 +58,7 @@ async def read_serial(serial_port):
             # Menerima data dari port serial
             received_data = await asyncio.to_thread(serial_port.readline)
             decoded_data = received_data.decode('ascii').strip()
-
+            await asyncio.sleep(5)
             # Memeriksa apakah data diterima
             if decoded_data:
                 print("Data diterima")
@@ -69,6 +69,9 @@ async def read_serial(serial_port):
                     conn.commit()  # Commit perubahan ke database
 
                     await send_end(serial_port)
+            else:
+                print("Tidak Menerima Data Selama 5 Detik")
+                break
 
             await asyncio.sleep(1)  # Menunggu sejenak sebelum mengulang loop
     finally:
