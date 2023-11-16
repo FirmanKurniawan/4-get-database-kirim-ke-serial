@@ -26,6 +26,20 @@ async def process_serial_data(serial_data, cursor):
     # Eksekusi pernyataan INSERT ke database
     cursor.execute(insert_statement)
 
+async def send_presensi_data(serial_port):
+    # Kirim data "presensi" ke port serial
+    serial_port.write("presensi\n".encode('ascii'))
+    print("Data presensi dikirim")
+
+    # Tunggu sebentar untuk memberikan waktu pada komputer lain untuk memproses dan mengirim balik data
+    await asyncio.sleep(2)
+
+async def send_end(serial_port):
+    serial_port.write("END\n".encode('ascii'))
+
+    # Tunggu sebentar untuk memberikan waktu pada komputer lain untuk memproses dan mengirim balik data
+    await asyncio.sleep(2)
+
 async def read_serial(serial_port):
     conn = psycopg2.connect(
         host="localhost",
@@ -36,30 +50,29 @@ async def read_serial(serial_port):
 
     cursor = conn.cursor()
 
-    while True:
-        # Menerima data dari port serial
-        received_data = await asyncio.to_thread(serial_port.readline)
-        decoded_data = received_data.decode('ascii').strip()
+    try:
+        # Kirim data presensi ke port serial
+        await send_presensi_data(serial_port)
 
-        # Memeriksa apakah data diterima
-        if decoded_data:
-            print("Data diterima")
+        while True:
+            # Menerima data dari port serial
+            received_data = await asyncio.to_thread(serial_port.readline)
+            decoded_data = received_data.decode('ascii').strip()
 
-            # Process and print each line of the received data
-            for line in decoded_data.split("\n"):
-                await process_serial_data(line, cursor)
-                conn.commit()  # Commit perubahan ke database
+            # Memeriksa apakah data diterima
+            if decoded_data:
+                print("Data diterima")
 
-            # Wait for the "END" signal
-            end_signal = await asyncio.to_thread(serial_port.readline)
-            decoded_end_signal = end_signal.decode('ascii').strip()
+                # Process and print each line of the received data
+                for line in decoded_data.split("\n"):
+                    await process_serial_data(line, cursor)
+                    conn.commit()  # Commit perubahan ke database
 
-            if decoded_end_signal == "END":
-                print("Proses selesai.")
-                # Wait for any remaining data to be read
-                await asyncio.to_thread(serial_port.read_all())
+                    await send_end(serial_port)
 
-        await asyncio.sleep(1)  # Menunggu sejenak sebelum mengulang loop
+            await asyncio.sleep(1)  # Menunggu sejenak sebelum mengulang loop
+    finally:
+        conn.close()
 
 async def main():
     serial_port = serial.Serial('COM5', 19200, timeout=1)
